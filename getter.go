@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -100,6 +101,64 @@ func (f *structFields) get(s *getterState, v reflect.Value) (err error) {
 	return
 }
 
+func boolProc(s string, v reflect.Value) error {
+	r, err := strconv.ParseBool(s)
+	v.SetBool(r)
+	return err
+}
+
+func intProc(s string, v reflect.Value) error {
+	r, err := strconv.ParseInt(s, 10, bitSize(v.Kind()))
+	v.SetInt(r)
+	return err
+}
+
+func uintProc(s string, v reflect.Value) error {
+	r, err := strconv.ParseUint(s, 10, bitSize(v.Kind()))
+	v.SetUint(r)
+	return err
+}
+
+func floatProc(s string, v reflect.Value) error {
+	r, err := strconv.ParseFloat(s, bitSize(v.Kind()))
+	v.SetFloat(r)
+	return err
+}
+
+func pointerProc(s string, v reflect.Value) error {
+	rv := reflect.New(v.Type().Elem())
+	parser := getProc(rv.Type())
+	if err := parser(s, rv.Elem()); err != nil {
+		return err
+	}
+	v.Set(rv)
+	return nil
+}
+
+func stringParser(s string, v reflect.Value) error {
+	v.SetString(s)
+	return nil
+}
+
+func getProc(t reflect.Type) func(string, reflect.Value) error {
+	switch t.Elem().Kind() {
+	case reflect.Bool:
+		return boolProc
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return intProc
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return uintProc
+	case reflect.Float32, reflect.Float64:
+		return floatProc
+	case reflect.Pointer:
+		return pointerProc
+	case reflect.String:
+		return stringParser
+	default:
+		return nil
+	}
+}
+
 func boolGetter(s *getterState, v reflect.Value) error {
 	if err := s.getEnv(); err != nil {
 		return err
@@ -107,9 +166,7 @@ func boolGetter(s *getterState, v reflect.Value) error {
 	if s.Len() == 0 {
 		return nil
 	}
-	r, err := strconv.ParseBool(s.String())
-	v.SetBool(r)
-	return err
+	return boolProc(s.String(), v)
 }
 
 func intGetter(s *getterState, v reflect.Value) error {
@@ -119,9 +176,7 @@ func intGetter(s *getterState, v reflect.Value) error {
 	if s.Len() == 0 {
 		return nil
 	}
-	r, err := strconv.ParseInt(s.String(), 10, bitSize(v.Kind()))
-	v.SetInt(r)
-	return err
+	return intProc(s.String(), v)
 }
 
 func uintGetter(s *getterState, v reflect.Value) error {
@@ -131,9 +186,7 @@ func uintGetter(s *getterState, v reflect.Value) error {
 	if s.Len() == 0 {
 		return nil
 	}
-	r, err := strconv.ParseUint(s.String(), 10, bitSize(v.Kind()))
-	v.SetUint(r)
-	return err
+	return uintProc(s.String(), v)
 }
 
 func floatGetter(s *getterState, v reflect.Value) error {
@@ -143,14 +196,43 @@ func floatGetter(s *getterState, v reflect.Value) error {
 	if s.Len() == 0 {
 		return nil
 	}
-	r, err := strconv.ParseFloat(s.String(), bitSize(v.Kind()))
-	v.SetFloat(r)
-	return err
+	return floatProc(s.String(), v)
 }
 
-//func arrayGetter(s *getterState, v reflect.Value) error {
-//	return nil
-//}
+func arrayGetter(t reflect.Type) getterFunc {
+	proc := getProc(t)
+	if proc == nil {
+		return unsupportedTypeGetter
+	}
+
+	return func(s *getterState, v reflect.Value) error {
+		if err := s.getEnv(); err != nil {
+			return err
+		}
+		if s.Len() == 0 {
+			return nil
+		}
+		if s.field.raw && v.Type().Elem().Kind() == reflect.Uint8 {
+			if s.Len() > v.Len() {
+				return errors.New("index out of range")
+			}
+			for i, b := range s.Bytes() {
+				v.Index(i).SetUint(uint64(b))
+			}
+			return nil
+		}
+		bs := strings.Split(s.String(), ",")
+		if len(bs) > v.Len() {
+			return errors.New("index out of range")
+		}
+		for i, r := range bs {
+			if err := proc(r, v.Index(i)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
 
 func interfaceGetter(s *getterState, v reflect.Value) error {
 	if v.IsNil() {
@@ -159,10 +241,6 @@ func interfaceGetter(s *getterState, v reflect.Value) error {
 	}
 	return s.reflectValue(v.Elem())
 }
-
-//func mapGetter(s *getterState, v reflect.Value) error {
-//	return nil
-//}
 
 func pointerGetter(s *getterState, v reflect.Value) error {
 	if v.IsNil() {
@@ -178,20 +256,33 @@ func pointerGetter(s *getterState, v reflect.Value) error {
 	return s.reflectValue(v.Elem())
 }
 
-func bytesGetter(s *getterState, v reflect.Value) error {
-	if err := s.getEnv(); err != nil {
-		return err
+func sliceGetter(t reflect.Type) getterFunc {
+	parser := getProc(t)
+	if parser == nil {
+		return unsupportedTypeGetter
 	}
-	if s.Len() == 0 {
+
+	return func(s *getterState, v reflect.Value) error {
+		if err := s.getEnv(); err != nil {
+			return err
+		}
+		if s.Len() == 0 {
+			return nil
+		}
+		if s.field.raw && v.Type().Elem().Kind() == reflect.Uint8 {
+			v.SetBytes(s.Bytes())
+			return nil
+		}
+		bs := strings.Split(s.String(), ",")
+		v.Set(reflect.MakeSlice(t, len(bs), len(bs)))
+		for i, r := range bs {
+			if err := parser(r, v.Index(i)); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
-	v.SetBytes(s.Bytes())
-	return nil
 }
-
-//func sliceGetter(s *getterState, v reflect.Value) error {
-//	return nil
-//}
 
 func stringGetter(s *getterState, v reflect.Value) error {
 	if err := s.getEnv(); err != nil {
@@ -200,8 +291,7 @@ func stringGetter(s *getterState, v reflect.Value) error {
 	if s.Len() == 0 {
 		return nil
 	}
-	v.SetString(s.String())
-	return nil
+	return stringParser(s.String(), v)
 }
 
 func structGetter(s *getterState, v reflect.Value) error {

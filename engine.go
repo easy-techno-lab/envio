@@ -57,26 +57,18 @@ func (e *engine) typeFunctions(t reflect.Type) *functions {
 	case reflect.Float32, reflect.Float64:
 		f.setterFunc = floatSetter
 		f.getterFunc = floatGetter
-	//case reflect.Array:
-	//	f.setterFunc = arraySetter
-	//	f.getterFunc = arrayGetter
+	case reflect.Array:
+		f.setterFunc = sliceSetter(t)
+		f.getterFunc = arrayGetter(t)
 	case reflect.Interface:
 		f.setterFunc = interfaceSetter
 		f.getterFunc = interfaceGetter
-	//case reflect.Map:
-	//	f.setterFunc = mapSetter
-	//	f.getterFunc = mapGetter)
 	case reflect.Pointer:
 		f.setterFunc = pointerSetter
 		f.getterFunc = pointerGetter
 	case reflect.Slice:
-		if t.Elem().Kind() == reflect.Uint8 {
-			f.setterFunc = bytesSetter
-			f.getterFunc = bytesGetter
-		} else {
-			f.setterFunc = unsupportedTypeSetter
-			f.getterFunc = unsupportedTypeGetter
-		}
+		f.setterFunc = sliceSetter(t)
+		f.getterFunc = sliceGetter(t)
 	case reflect.String:
 		f.setterFunc = stringSetter
 		f.getterFunc = stringGetter
@@ -97,6 +89,7 @@ type field struct {
 	name      string
 	typ       reflect.Type
 	mandatory bool
+	raw       bool
 	functions *functions
 	embedded  structFields
 }
@@ -164,8 +157,13 @@ func (e *engine) typeFields(t reflect.Type) structFields {
 			if len(val) != 0 {
 				f.name = val[0]
 
-				if len(val) > 1 && val[1] == "m" {
-					f.mandatory = true
+				for _, v := range val {
+					switch v {
+					case "m":
+						f.mandatory = true
+					case "raw":
+						f.raw = true
+					}
 				}
 			}
 		}

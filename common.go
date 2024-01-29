@@ -26,8 +26,9 @@ func bitSize(v reflect.Kind) int {
 		return 64
 	case reflect.Int, reflect.Uint, reflect.Uintptr:
 		return 32 << (^uint(0) >> 63)
+	default:
+		return 0
 	}
-	return 0
 }
 
 func isEmptyValue(v reflect.Value) bool {
@@ -42,8 +43,9 @@ func isEmptyValue(v reflect.Value) bool {
 		return v.IsZero()
 	case reflect.Interface, reflect.Pointer:
 		return v.IsNil()
+	default:
+		return !v.IsValid()
 	}
-	return !v.IsValid()
 }
 
 type context struct {
