@@ -173,7 +173,7 @@ func sliceSetter(t reflect.Type) setterFunc {
 		buf := make([]byte, 0)
 		for i := 0; i < v.Len(); i++ {
 			if i > 0 {
-				buf = append(buf, ',')
+				buf = append(buf, s.separator...)
 			}
 			buf = append(buf, proc(s, v.Index(i))...)
 		}

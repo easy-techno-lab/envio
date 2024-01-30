@@ -8,7 +8,9 @@ import (
 
 const name = "env"
 
-var e = new(engine)
+var e = &engine{
+	separator: []byte{envSeparator},
+}
 
 // Set sets values from v to environment variables.
 // If v is nil, Set returns a setter error.
@@ -22,7 +24,9 @@ func Get(v any) error {
 	return e.get(v)
 }
 
-type engine struct{}
+type engine struct {
+	separator []byte
+}
 
 type functions struct {
 	setterFunc

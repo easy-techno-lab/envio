@@ -36,6 +36,13 @@ type deepEmbed struct {
 	Bar string `env:"BAR"`
 }
 
+type slcArr struct {
+	Slc      []bool `env:"ENV_SLC"`
+	Arr      [5]int `env:"ENV_ARR"`
+	Bytes    []byte `env:"ENV_BYTES"`
+	BytesRaw []byte `env:"ENV_BYTES_RAW,raw"`
+}
+
 type env struct {
 	name  string
 	value string
@@ -116,6 +123,21 @@ func Test_Set(t *testing.T) {
 				{name: "ENV_Y", value: "false"},
 				{name: "ENV_Z", value: "111"},
 				{name: "BAR", value: "foo"},
+			},
+		},
+		{
+			name: "arrays and slices",
+			input: &slcArr{
+				Slc:      []bool{true, false, true},
+				Arr:      [5]int{0, 5, 8},
+				Bytes:    []byte{65, 66, 67, 68},
+				BytesRaw: []byte{65, 66, 67, 68},
+			},
+			expect: []env{
+				{name: "ENV_SLC", value: testEnvSlc},
+				{name: "ENV_ARR", value: testEnvArr},
+				{name: "ENV_BYTES", value: testEnvBytes},
+				{name: "ENV_BYTES_RAW", value: "ABCD"},
 			},
 		},
 	}
@@ -270,6 +292,22 @@ func Test_Get(t *testing.T) {
 					simple: simple{A: "test", B: true, C: 28, D: 3.14},
 				},
 				Bar: "foo",
+			},
+		},
+		{
+			name: "arrays and slices",
+			envs: []env{
+				{name: "ENV_SLC", value: testEnvSlc},
+				{name: "ENV_ARR", value: testEnvArr},
+				{name: "ENV_BYTES", value: testEnvBytes},
+				{name: "ENV_BYTES_RAW", value: "ABCD"},
+			},
+			input: new(slcArr),
+			expect: &slcArr{
+				Slc:      []bool{true, false, true},
+				Arr:      [5]int{0, 5, 8},
+				Bytes:    []byte{65, 66, 67, 68},
+				BytesRaw: []byte{65, 66, 67, 68},
 			},
 		},
 	}

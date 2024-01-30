@@ -7,7 +7,6 @@ import (
 	"os"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 )
 
@@ -221,12 +220,12 @@ func arrayGetter(t reflect.Type) getterFunc {
 			}
 			return nil
 		}
-		bs := strings.Split(s.String(), ",")
+		bs := bytes.Split(s.Bytes(), s.separator)
 		if len(bs) > v.Len() {
 			return errors.New("index out of range")
 		}
 		for i, r := range bs {
-			if err := proc(r, v.Index(i)); err != nil {
+			if err := proc(string(r), v.Index(i)); err != nil {
 				return err
 			}
 		}
@@ -273,10 +272,10 @@ func sliceGetter(t reflect.Type) getterFunc {
 			v.SetBytes(s.Bytes())
 			return nil
 		}
-		bs := strings.Split(s.String(), ",")
+		bs := bytes.Split(s.Bytes(), s.separator)
 		v.Set(reflect.MakeSlice(t, len(bs), len(bs)))
 		for i, r := range bs {
-			if err := parser(r, v.Index(i)); err != nil {
+			if err := parser(string(r), v.Index(i)); err != nil {
 				return err
 			}
 		}
