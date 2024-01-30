@@ -110,10 +110,6 @@ func floatSetter(s *setterState, v reflect.Value) error {
 	return s.setEnv(strconv.AppendFloat(s.scratch[:0], v.Float(), 'g', -1, bitSize(v.Kind())))
 }
 
-//func arraySetter(s *setterState, v reflect.Value) error {
-//	return nil
-//}
-
 func interfaceSetter(s *setterState, v reflect.Value) error {
 	if v.IsNil() {
 		s.err = ErrNilInterface
@@ -122,21 +118,68 @@ func interfaceSetter(s *setterState, v reflect.Value) error {
 	return s.reflectValue(v.Elem())
 }
 
-//func mapSetter(s *setterState, v reflect.Value) error {
-//	return nil
-//}
-
 func pointerSetter(s *setterState, v reflect.Value) error {
 	return s.reflectValue(valueFromPtr(v))
 }
 
-func bytesSetter(s *setterState, v reflect.Value) error {
-	return s.setEnv(v.Bytes())
+func setProc(t reflect.Type) func(*setterState, reflect.Value) []byte {
+	switch t.Elem().Kind() {
+	case reflect.Bool:
+		return func(s *setterState, v reflect.Value) []byte {
+			return strconv.AppendBool(s.scratch[:0], v.Bool())
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return func(s *setterState, v reflect.Value) []byte {
+			return strconv.AppendInt(s.scratch[:0], v.Int(), 10)
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return func(s *setterState, v reflect.Value) []byte {
+			return strconv.AppendUint(s.scratch[:0], v.Uint(), 10)
+		}
+	case reflect.Float32, reflect.Float64:
+		return func(s *setterState, v reflect.Value) []byte {
+			return strconv.AppendFloat(s.scratch[:0], v.Float(), 'g', -1, bitSize(v.Kind()))
+		}
+	case reflect.Pointer:
+		return func(s *setterState, v reflect.Value) []byte {
+			proc := setProc(v.Type())
+			v = valueFromPtr(v)
+			return proc(s, v)
+		}
+	case reflect.String:
+		return func(s *setterState, v reflect.Value) []byte {
+			return append(s.scratch[:0], v.String()...)
+		}
+	default:
+		return nil
+	}
 }
 
-//func sliceSetter(s *setterState, v reflect.Value) error {
-//	return nil
-//}
+func sliceSetter(t reflect.Type) setterFunc {
+	proc := setProc(t)
+	if proc == nil {
+		return unsupportedTypeSetter
+	}
+
+	return func(s *setterState, v reflect.Value) error {
+		if s.field.raw && v.Type().Elem().Kind() == reflect.Uint8 {
+			buf := make([]byte, 0, v.Len())
+			for i := 0; i < v.Len(); i++ {
+				buf = append(buf, uint8(v.Index(i).Uint()))
+			}
+			return s.setEnv(buf)
+		}
+
+		buf := make([]byte, 0)
+		for i := 0; i < v.Len(); i++ {
+			if i > 0 {
+				buf = append(buf, s.separator...)
+			}
+			buf = append(buf, proc(s, v.Index(i))...)
+		}
+		return s.setEnv(buf)
+	}
+}
 
 func stringSetter(s *setterState, v reflect.Value) error {
 	return s.setEnv(append(s.scratch[:0], v.String()...))
