@@ -10,7 +10,7 @@ import (
 
 const setError = "set data from"
 
-func (e *engine) set(v any) (err error) {
+func (e *engine) set(v any) error {
 	s := e.newSetState()
 	defer setStatePool.Put(s)
 

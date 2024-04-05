@@ -12,7 +12,7 @@ import (
 
 const getError = "get data into"
 
-func (e *engine) get(v any) (err error) {
+func (e *engine) get(v any) error {
 	if t := reflect.ValueOf(v).Kind(); t != reflect.Pointer {
 		return fmt.Errorf("%s: the input value is not a pointer", name)
 	}
