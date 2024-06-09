@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"sync"
 )
@@ -269,7 +270,7 @@ func sliceGetter(t reflect.Type) getterFunc {
 			return nil
 		}
 		if s.field.raw && v.Type().Elem().Kind() == reflect.Uint8 {
-			v.SetBytes(s.Bytes())
+			v.SetBytes(slices.Clone(s.Bytes()))
 			return nil
 		}
 		bs := bytes.Split(s.Bytes(), s.separator)
