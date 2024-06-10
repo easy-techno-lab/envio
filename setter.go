@@ -94,6 +94,24 @@ func (f *structFields) set(s *setterState, v reflect.Value) (err error) {
 	return
 }
 
+func setSetter(s *setterState, v reflect.Value) error {
+	tmp := reflect.ValueOf(v.Interface())
+	v = reflect.New(v.Type())
+	v.Elem().Set(tmp)
+
+	f, ok := v.Interface().(Setter)
+	if !ok {
+		return nil
+	}
+
+	p, err := f.SetENV()
+	if err != nil {
+		return err
+	}
+
+	return s.setEnv(p)
+}
+
 func boolSetter(s *setterState, v reflect.Value) error {
 	return s.setEnv(strconv.AppendBool(s.scratch[:0], v.Bool()))
 }
