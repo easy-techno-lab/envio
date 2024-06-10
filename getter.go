@@ -159,6 +159,26 @@ func getProc(t reflect.Type) func(string, reflect.Value) error {
 	}
 }
 
+func getGetter(s *getterState, v reflect.Value) error {
+	rv := reflect.New(v.Type())
+
+	f, ok := rv.Interface().(Getter)
+	if !ok {
+		return nil
+	}
+
+	if err := s.getEnv(); err != nil {
+		return err
+	}
+
+	if err := f.GetENV(slices.Clone(s.Bytes())); err != nil {
+		return err
+	}
+
+	v.Set(rv.Elem())
+	return nil
+}
+
 func boolGetter(s *getterState, v reflect.Value) error {
 	if err := s.getEnv(); err != nil {
 		return err

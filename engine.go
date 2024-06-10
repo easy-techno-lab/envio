@@ -84,6 +84,16 @@ func (e *engine) typeFunctions(t reflect.Type) *functions {
 		f.getterFunc = unsupportedTypeGetter
 	}
 
+	if t.Kind() != reflect.Pointer {
+		p := reflect.PointerTo(t)
+		if p.Implements(setter) {
+			f.setterFunc = setSetter
+		}
+		if p.Implements(getter) {
+			f.getterFunc = getGetter
+		}
+	}
+
 	return f
 }
 
